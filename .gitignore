@@ -21,3 +21,10 @@
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+
+/report-errors.json
+/report-full.json
+/error-search.html
+/error-search.json
+/scanned-files.json
+*.mp3
