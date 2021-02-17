@@ -4,8 +4,12 @@ const bodyParser = require("body-parser");
 const NodeID3 = require("node-id3");
 const fs = require("fs");
 const utils = require("./utils");
+
 const REPORTS_PATH = "./src/reports";
-const errorsReport = require(REPORTS_PATH + "/report-errors.json");
+const ERRORS_REPORT_PATH = REPORTS_PATH + "/report-errors.json";
+const SCANNED_FILES_PATH = REPORTS_PATH + "/scanned-files.json";
+const errorsReport = require(ERRORS_REPORT_PATH);
+const scannedFiles = require(SCANNED_FILES_PATH);
 //console.log("errorsReport:", errorsReport)
 
 var app = express();
@@ -19,16 +23,23 @@ app.get("/getSong", function (req, res) {
   res.sendFile(req.query.file);
 });
 
+app.get("/rejectSong", function (req, res) {
+  const filepath = req.query.file;
+  removeFromErrorsReport(filepath);
+  setFileStatus(filepath, "Nof found");
+  res.send();
+});
+
 app.post("/updateSong", function (req, res) {
   console.log("updateSong:", req.body.filename);
   if (req.body) {
     const filepath = req.body.filepath;
-    const success = updateId3(req.body.filepath, req.body.details);
+    const success = updateId3(req.body.filepath, req.body);
     console.log("success:", success);
     if (success) {
       //const errors = fs.readFileSync('./report-errors.json', 'utf8');
-      delete errorsReport[filepath];
-      utils.writeJsonFile(ERRORS_REPORT_PATH, errorsReport);
+      setFileStatus(filepath, "Updated");
+      removeFromErrorsReport(filepath);
       res.send();
     } else {
       res.status(500);
@@ -41,21 +52,40 @@ let port = process.env.PORT || 5000;
 app.listen(port);
 console.log("Server running on port", port);
 
-function updateId3(filepath, details) {
-  console.log("updateId3:", filepath, details);
+function updateId3(filepath, item) {
+  console.log("updateId3:", filepath);
   //const id3 = NodeID3.read(filepath);
   const newId3 = {
-    textWriter: details.lyricists,
-    composer: details.composers,
+    textWriter: item.details.lyricists,
     unsynchronisedLyrics: {
       language: "heb",
       shortText: null,
-      text: details.lyrics,
+      text: item.details.lyrics,
     },
   };
+  if (item.copyTitle) {
+    newId3.title = item.details.songTitle;
+  }
+  if (item.copyArtist) {
+    newId3.artist = item.details.artist;
+  }
+  if (!item.copyLyricsOnly) {
+    newId3.composer = item.details.composers;
+  }
+  console.log("newId3:", newId3);
   try {
     return NodeID3.update(newId3, filepath);
   } catch (err) {
     console.log("updateId3: err:", err);
   }
+}
+
+function removeFromErrorsReport(filepath) {
+  delete errorsReport[filepath];
+  utils.writeJsonFile(ERRORS_REPORT_PATH, errorsReport);
+}
+
+function setFileStatus(filepath, status) {
+  scannedFiles[filepath] = status;
+  utils.writeJsonFile(SCANNED_FILES_PATH, scannedFiles);
 }

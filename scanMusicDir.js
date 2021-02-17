@@ -95,10 +95,10 @@ async function updateFileFromShironet(filepath) {
       if (
         report.artistSimilarity >= 0.8 &&
         (report.titleSimilarity >= 0.8 ||
-          (details.songTitle.length > 5 &&updateId3
-            id3.title.indexOf(details.songTitle) == 0))
+          (details.songTitle.length > 5 &&
+            id3.title.indexOf(details.songTitle) === 0))
       ) {
-        (filepath, id3, details);
+        updateId3(filepath, id3, details);
         report.modified = true;
         report.status = STATUS_UPDATED;
       } else if (

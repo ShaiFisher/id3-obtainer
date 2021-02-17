@@ -6,6 +6,7 @@ const ROWS_DISPLAYED = 10;
 const BACKEND_URL = "http://localhost:5000";
 const GET_AUDIO_ENDPOINT = BACKEND_URL + "/getSong?file=";
 const UPDATE_SONG_ENDPOINT = BACKEND_URL + "/updateSong";
+const REJECT_SONG_ENDPOINT = BACKEND_URL + "/rejectSong";
 
 const items = [];
 Object.keys(ITEMS).forEach((key) => {
@@ -20,11 +21,10 @@ Object.keys(ITEMS).forEach((key) => {
 const approved = [];
 const rejected = [];
 
-function popItem(filepath) {
+function getItem(filepath) {
   const i = items.findIndex((item) => item.filepath === filepath);
   const item = items[i];
-  items.splice(i, 1);
-  return item;
+  return [item, i];
 }
 
 function App() {
@@ -33,12 +33,27 @@ function App() {
   const [approvedNum, setApprovedNum] = useState(0);
   const [rejectedNum, setRejectedNum] = useState(0);
 
+  const setCopyTitle = (event) => {
+    const [item, i] = getItem(event.target.name);
+    item.copyTitle = true;
+  };
+
+  const setCopyArtist = (event) => {
+    const [item, i] = getItem(event.target.name);
+    item.copyArtist = true;
+  };
+
+  const setLyricsOnly = (event) => {
+    const [item, i] = getItem(event.target.name);
+    item.copyLyricsOnly = true;
+  };
+
   const approve = (event) => {
     console.log("approve", event.target.name);
-    const i = items.findIndex((item) => item.filepath === event.target.name);
-    const item = items[i];
+    //const i = items.findIndex((item) => item.filepath === event.target.name);
+    //const item = items[i];
+    const [item, i] = getItem(event.target.name);
 
-    setApprovedNum(approvedNum + 1);
     fetch(UPDATE_SONG_ENDPOINT, {
       method: "POST",
       headers: {
@@ -51,6 +66,7 @@ function App() {
         if (response.status === 200) {
           approved.push(item);
           items.splice(i, 1);
+          setApprovedNum(approvedNum + 1);
         } else {
           alert("error");
         }
@@ -62,9 +78,24 @@ function App() {
 
   const reject = (event) => {
     console.log("reject", event.target.name);
-    const item = popItem(event.target.name);
-    rejected.push(item);
-    setRejectedNum(rejectedNum + 1);
+    //const i = items.findIndex((item) => item.filepath === event.target.name);
+    //const item = items[i];
+    const [item, i] = getItem(event.target.name);
+
+    fetch(REJECT_SONG_ENDPOINT + "?file=" + item.filepath)
+      .then((response) => {
+        console.log("response:", response.status);
+        if (response.status === 200) {
+          rejected.push(item);
+          items.splice(i, 1);
+          setRejectedNum(rejectedNum + 1);
+        } else {
+          alert("error");
+        }
+      })
+      .catch((error) => {
+        console.log("error:", error);
+      });
   };
 
   const apply = () => {
@@ -110,9 +141,7 @@ function App() {
               index < ROWS_DISPLAYED && (
                 <React.Fragment key={item.filepath}>
                   <tr>
-                    <td>
-                      {item.filename}
-                    </td>
+                    <td>{item.filename}</td>
                     <td>
                       {item.id3.artist} - {item.id3.title}
                     </td>
@@ -136,7 +165,36 @@ function App() {
                         type="audio/mpeg"
                       ></audio>
                     </td>
-                    <td colSpan="3">{item.details.lyrics}</td>
+                    <td colSpan="2">
+                      מילים: {item.details.lyricists};
+                      לחן: {item.details.composers}<br></br>
+                      {item.details.lyrics}</td>
+                    <td>
+                      <div>
+                        <input
+                          type="checkbox"
+                          name={item.filepath}
+                          onClick={setCopyTitle}
+                        ></input>
+                        שנה שם
+                      </div>
+                      <div>
+                        <input
+                          type="checkbox"
+                          name={item.filepath}
+                          onClick={setCopyArtist}
+                        ></input>
+                        שנה אמן
+                      </div>
+                      <div>
+                        <input
+                          type="checkbox"
+                          name={item.filepath}
+                          onClick={setLyricsOnly}
+                        ></input>
+                        רק מילים
+                      </div>
+                    </td>
                   </tr>
                 </React.Fragment>
               )
