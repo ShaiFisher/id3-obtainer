@@ -28,3 +28,4 @@ yarn-error.log*
 /error-search.json
 /scanned-files.json
 *.mp3
+/src/reports/

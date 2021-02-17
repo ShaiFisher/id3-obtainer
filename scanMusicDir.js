@@ -4,9 +4,11 @@ const path = require("path");
 var stringSimilarity = require("string-similarity");
 //const discogs = require("./discogs");
 const shironet = require("./shironet");
-const scannedFiles = require("./scanned-files.json");
-const errorsReport = require("./report-errors.json");
 const utils = require("./utils");
+const REPORTS_PATH = "./src/reports";
+const scannedFiles = require(REPORTS_PATH + "/scanned-files.json");
+const errorsReport = require(REPORTS_PATH + "/report-errors.json");
+
 
 const STATUS_MISSING = "Missing information";
 const STATUS_ALREADY = "Already updated";
@@ -72,7 +74,7 @@ async function updateFileFromShironet(filepath) {
   };
   let details;
 
-  if (errorsReport[id3.artist + "_" + id3.title]) {
+  if (errorsReport[filepath]) {
     report.passed = true;
     report.status = STATUS_SKIPPED;
   } else if (!id3.artist || !id3.title) {
@@ -93,10 +95,10 @@ async function updateFileFromShironet(filepath) {
       if (
         report.artistSimilarity >= 0.8 &&
         (report.titleSimilarity >= 0.8 ||
-          (details.songTitle.length > 5 &&
+          (details.songTitle.length > 5 &&updateId3
             id3.title.indexOf(details.songTitle) == 0))
       ) {
-        updateId3(filepath, id3, details);
+        (filepath, id3, details);
         report.modified = true;
         report.status = STATUS_UPDATED;
       } else if (
@@ -138,7 +140,7 @@ function createReportObj(path, items, dirFiles) {
   return report;
 }
 
-async function updateDirFromShironet(filepath) {
+async function updateDirFromShironet(runPath) {
   glob(runPath + "/**/*.mp3", async function (er, files) {
     const fullReports = [];
     let callouts = 0;
@@ -160,7 +162,7 @@ async function updateDirFromShironet(filepath) {
             result.status !== STATUS_UPDATED &&
             !result.passed
           ) {
-            errorsReport[result.id3.artist + "_" + result.id3.title] = result;
+            errorsReport[file] = result;
           }
           if (result.callout) {
             callouts++;
@@ -173,8 +175,8 @@ async function updateDirFromShironet(filepath) {
     }
     console.log();
     const report = createReportObj(runPath, fullReports, files.length)
-    utils.writeJsonFile("report-full.json", report);
-    utils.writeJsonFile("report-errors.json", errorsReport);
-    utils.writeJsonFile("scanned-files.json", scannedFiles);
+    utils.writeJsonFile(REPORTS_PATH + "/report-full.json", report);
+    utils.writeJsonFile(REPORTS_PATH + "/report-errors.json", errorsReport);
+    utils.writeJsonFile(REPORTS_PATH + "/scanned-files.json", scannedFiles);
   });
 }

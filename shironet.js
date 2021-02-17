@@ -59,7 +59,7 @@ function getMetaAttribute(root, name) {
 }
 
 function parseLyrics(lyrics) {
-  return lyrics.replace(/<br>/g, "");
+  return lyrics && lyrics.replace(/<br>/g, "");
 }
 
 /*
