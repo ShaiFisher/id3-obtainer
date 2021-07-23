@@ -2,7 +2,6 @@ const express = require("express");
 const cors = require("cors");
 const bodyParser = require("body-parser");
 const NodeID3 = require("node-id3");
-const fs = require("fs");
 const utils = require("./utils");
 
 const REPORTS_PATH = "./src/reports";
@@ -18,6 +17,12 @@ app.use(cors());
 app.use(bodyParser.urlencoded({ extended: false }));
 app.use(bodyParser.json());
 
+
+app.get("/getErrorsReport", function (req, res) {
+  console.log("getErrorsReport");
+  res.send(errorsReport);
+});
+
 app.get("/getSong", function (req, res) {
   console.log("getSong:", req.query.file);
   res.sendFile(req.query.file);
@@ -25,8 +30,8 @@ app.get("/getSong", function (req, res) {
 
 app.get("/rejectSong", function (req, res) {
   const filepath = req.query.file;
-  removeFromErrorsReport(filepath);
-  setFileStatus(filepath, "Nof found");
+  delete errorsReport[filepath];
+  scannedFiles[filepath] = "Nof found";
   res.send();
 });
 
@@ -38,14 +43,19 @@ app.post("/updateSong", function (req, res) {
     console.log("success:", success);
     if (success) {
       //const errors = fs.readFileSync('./report-errors.json', 'utf8');
-      setFileStatus(filepath, "Updated");
-      removeFromErrorsReport(filepath);
+      scannedFiles[filepath] = "Updated";
+      delete errorsReport[filepath];
       res.send();
     } else {
       res.status(500);
       res.send(success);
     }
   }
+});
+
+app.get("/updateReports", function (req, res) {
+  updateFiles();
+  res.send();
 });
 
 let port = process.env.PORT || 5000;
@@ -80,12 +90,7 @@ function updateId3(filepath, item) {
   }
 }
 
-function removeFromErrorsReport(filepath) {
-  delete errorsReport[filepath];
+function updateFiles() {
   utils.writeJsonFile(ERRORS_REPORT_PATH, errorsReport);
-}
-
-function setFileStatus(filepath, status) {
-  scannedFiles[filepath] = status;
   utils.writeJsonFile(SCANNED_FILES_PATH, scannedFiles);
 }

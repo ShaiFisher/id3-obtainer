@@ -5,16 +5,19 @@ var stringSimilarity = require("string-similarity");
 //const discogs = require("./discogs");
 const shironet = require("./shironet");
 const utils = require("./utils");
-const REPORTS_PATH = "./src/reports";
-const scannedFiles = require(REPORTS_PATH + "/scanned-files.json");
-const errorsReport = require(REPORTS_PATH + "/report-errors.json");
 
+const REPORTS_PATH = "./src/reports";
+const SCANNED_FILE_PATH = REPORTS_PATH + "/scanned-files.json";
+const ERRORS_REPORT_PATH = REPORTS_PATH + "/report-errors.json";
+const DETAILS_DB_PATH = REPORTS_PATH + "/details-db.json";
+const scannedFiles = require(SCANNED_FILE_PATH);
+const errorsReport = require(ERRORS_REPORT_PATH);
+const detailsDb = require(DETAILS_DB_PATH);
 
 const STATUS_MISSING = "Missing information";
 const STATUS_ALREADY = "Already updated";
 const STATUS_NOT_FOUND = "Not found";
 const STATUS_DIFF_TITLE = "Different title";
-const STATUS_DIFF_ARTIST = "Different artist";
 const STATUS_UPDATED = "Updated";
 const STATUS_SKIPPED = "Skipped";
 
@@ -32,6 +35,8 @@ console.log(
 
 updateDirFromShironet(runPath);
 
+console.log("Scan done.\nRun start:listener.js and start:app to examine erros.");
+
 function updateId3(filepath, id3, details) {
   const newId3 = {
     ...id3,
@@ -43,7 +48,7 @@ function updateId3(filepath, id3, details) {
       text: details.lyrics,
     },
   };
-  NodeID3.write(newId3, filepath, function (err) {});
+  NodeID3.update(newId3, filepath, function (err) {});
 }
 
 function reduceId3(id3) {
@@ -82,32 +87,40 @@ async function updateFileFromShironet(filepath) {
   } else if (id3.composer && id3.textWriter && id3.unsynchronisedLyrics) {
     report.status = STATUS_ALREADY;
   } else {
-    // fetch details from Shironet
-    report.callout = true;
-    details = await shironet.search(id3.artist, id3.title);
-
-    // check results
-    if (!details || (!details.composers && !details.lyricists)) {
-      report.status = STATUS_NOT_FOUND;
+    // check in local db
+    const storedId3 = detailsDb[id3.artist + "_" + id3.title];
+    if (storedId3 && storedId3.unsynchronisedLyrics) {
+      NodeID3.update(storedId3, filepath);
+      report.modified = true;
+      report.status = STATUS_UPDATED;
     } else {
-      report.artistSimilarity = compare(details.artist, id3.artist);
-      report.titleSimilarity = compare(details.songTitle, id3.title);
-      if (
-        report.artistSimilarity >= 0.8 &&
-        (report.titleSimilarity >= 0.8 ||
-          (details.songTitle.length > 5 &&
-            id3.title.indexOf(details.songTitle) === 0))
-      ) {
-        updateId3(filepath, id3, details);
-        report.modified = true;
-        report.status = STATUS_UPDATED;
-      } else if (
-        details.artist !== id3.artist &&
-        details.songTitle !== id3.title
-      ) {
+      // fetch details from Shironet
+      report.callout = true;
+      details = await shironet.search(id3.artist, id3.title);
+
+      // check results
+      if (!details || (!details.composers && !details.lyricists)) {
         report.status = STATUS_NOT_FOUND;
       } else {
-        report.status = STATUS_DIFF_TITLE;
+        report.artistSimilarity = compare(details.artist, id3.artist);
+        report.titleSimilarity = compare(details.songTitle, id3.title);
+        if (
+          report.artistSimilarity >= 0.8 &&
+          (report.titleSimilarity >= 0.8 ||
+            (details.songTitle.length > 5 &&
+              id3.title.indexOf(details.songTitle) === 0))
+        ) {
+          updateId3(filepath, id3, details);
+          report.modified = true;
+          report.status = STATUS_UPDATED;
+        } else if (
+          details.artist !== id3.artist &&
+          details.songTitle !== id3.title
+        ) {
+          report.status = STATUS_NOT_FOUND;
+        } else {
+          report.status = STATUS_DIFF_TITLE;
+        }
       }
     }
   }
@@ -149,19 +162,13 @@ async function updateDirFromShironet(runPath) {
       const file = files[i];
       if (!scannedFiles[file]) {
         console.log("Handling file", i, path.basename(file));
-        const result = await updateFileFromShironet(file).catch(err => {
+        const result = await updateFileFromShironet(file).catch((err) => {
           console.log("halt error:", err);
           halt = true;
         });
         if (result) {
           fullReports.push(result);
-          if (
-            result.status &&
-            result.status !== STATUS_ALREADY &&
-            result.status !== STATUS_MISSING &&
-            result.status !== STATUS_UPDATED &&
-            !result.passed
-          ) {
+          if (result.status === STATUS_DIFF_TITLE) {
             errorsReport[file] = result;
           }
           if (result.callout) {
@@ -174,7 +181,7 @@ async function updateDirFromShironet(runPath) {
       }
     }
     console.log();
-    const report = createReportObj(runPath, fullReports, files.length)
+    const report = createReportObj(runPath, fullReports, files.length);
     utils.writeJsonFile(REPORTS_PATH + "/report-full.json", report);
     utils.writeJsonFile(REPORTS_PATH + "/report-errors.json", errorsReport);
     utils.writeJsonFile(REPORTS_PATH + "/scanned-files.json", scannedFiles);

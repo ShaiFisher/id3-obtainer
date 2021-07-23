@@ -1,0 +1,1 @@
+node scanMusicDir.js %1
